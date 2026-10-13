@@ -263,3 +263,57 @@ async function handleUserQuery() {
     window.speechSynthesis.cancel();
     
     loadingOverlay.classList.remove('hidden');
+    sceneLabel.innerText = "Generating 3D model for: " + topic;
+    clearScene();
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${AI_MODEL}:generateContent?key=${apiKey}`;
+
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nUser Topic: ${topic}` }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+        
+        const data = await response.json();
+        if(data.error) throw new Error(data.error.message);
+
+        let rawText = data.candidates[0].content.parts[0].text;
+        rawText = rawText.replace(/```json/g, '').replace(/```javascript/g, '').replace(/```/g, '').trim();
+        
+        let aiResponse;
+        try {
+            aiResponse = JSON.parse(rawText);
+        } catch (e) {
+            rawText = rawText.replace(/\\([a-zA-Z])/g, '\\\\$1');
+            aiResponse = JSON.parse(rawText);
+        }
+
+        appendMessage('ai', aiResponse.explanation, aiResponse.derivation, aiResponse.question);
+
+        if (aiResponse.threeJsCode) {
+            try {
+                const generate3DScene = new Function('scene', 'THREE', 'addUpdate', aiResponse.threeJsCode);
+                generate3DScene(scene, THREE, addUpdate);
+                sceneLabel.innerText = "Interactive 3D: " + topic;
+            } catch (threeErr) {
+                console.error("AI 3D Code Error:", threeErr);
+                sceneLabel.innerText = "Error rendering 3D diagram.";
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        appendMessage('ai', `Connection Failed: ${error.message}`);
+        sceneLabel.innerText = "System Offline";
+    } finally {
+        loadingOverlay.classList.add('hidden');
+    }
+}
+
+sendBtn.addEventListener('click', handleUserQuery);
+userInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleUserQuery();
+});
