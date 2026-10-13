@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // ==========================================
-// 1. API KEYS & VOICE SETUP
+// 1. API KEYS & HINGLISH VOICE SETUP
 // ==========================================
 const rawKeys = import.meta.env.VITE_GEMINI_API_KEYS || "";
 const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
@@ -15,6 +15,12 @@ function getRandomApiKey() {
 
 let voiceEnabled = true;
 const voiceToggle = document.getElementById('voice-toggle');
+
+// Pre-load voices to ensure the Indian accent is available
+let availableVoices = [];
+window.speechSynthesis.onvoiceschanged = () => {
+    availableVoices = window.speechSynthesis.getVoices();
+};
 
 voiceToggle.addEventListener('click', () => {
     voiceEnabled = !voiceEnabled;
@@ -31,9 +37,17 @@ voiceToggle.addEventListener('click', () => {
 function speakTeacher(text) {
     if (!voiceEnabled) return;
     window.speechSynthesis.cancel(); // Stop current speech if any
+    
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95; // Slightly slower, teacher-like pacing
+    utterance.rate = 0.9; // Slower, human-like teaching pace
     utterance.pitch = 1.0;
+    
+    // Find an Indian English (Hinglish accent) voice
+    const hinglishVoice = availableVoices.find(v => v.lang === 'en-IN' || v.lang.includes('hi-IN'));
+    if (hinglishVoice) {
+        utterance.voice = hinglishVoice;
+    }
+    
     window.speechSynthesis.speak(utterance);
 }
 
@@ -63,7 +77,6 @@ function loadTopics(subject) {
         quickTopicsDiv.appendChild(btn);
     });
 }
-// Load Physics by default
 loadTopics('physics');
 subjectSelector.addEventListener('change', (e) => loadTopics(e.target.value));
 
@@ -147,13 +160,12 @@ function appendMessage(sender, text, derivation = null, question = null) {
     chatHistory.appendChild(msgDiv);
     
     if (sender === 'ai') {
-        speakTeacher(text); // Trigger TTS Voice
+        speakTeacher(text); // Speak the Hinglish text out loud
         
         typeWriterEffect(p, text, 15, () => {
             if (derivation) {
                 const mathDiv = document.createElement('div');
                 mathDiv.className = 'derivation-box';
-                // Enforce $$ delimiters so KaTeX always catches it
                 mathDiv.innerHTML = `<strong>Derivation / Formula:</strong><br><br>$$${derivation}$$`;
                 msgDiv.appendChild(mathDiv);
             }
@@ -165,14 +177,11 @@ function appendMessage(sender, text, derivation = null, question = null) {
             }
             chatHistory.scrollTop = chatHistory.scrollHeight;
             
-            // Execute KaTeX rendering specifically on this new element
             if (window.renderMathInElement) {
                 window.renderMathInElement(msgDiv, {
                     delimiters: [
                         {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\(', right: '\\)', display: false},
-                        {left: '[', right: ']', display: true}
+                        {left: '$', right: '$', display: false}
                     ],
                     throwOnError: false
                 });
@@ -184,20 +193,20 @@ function appendMessage(sender, text, derivation = null, question = null) {
     }
 }
 
-// System Prompt updated to fix LaTeX rendering issues
+// Prompt updated to force Hinglish outputs
 const SYSTEM_PROMPT = `
-You are an expert Class 12 STEM 3D tutor. The user will give a topic.
+You are an expert Class 12 STEM 3D tutor teaching Indian students. The user will give a topic.
 Return ONLY a valid JSON object.
 Format:
 {
-  "explanation": "Clear explanation. Plain text only, no math symbols, because this will be read aloud by a Text-to-Speech voice.",
-  "derivation": "The mathematical derivation in raw LaTeX. DO NOT include $$ wrappers here, just the raw math code. Double escape backslashes (e.g., \\\\frac).",
+  "explanation": "Clear explanation of the topic written in Hinglish (a mix of Hindi and English written in the English alphabet, e.g., 'Aaj hum seekhenge...', 'Yeh concept bahut important hai...'). Use a friendly, human-like teaching tone. Plain text only, no math symbols.",
+  "derivation": "The mathematical derivation in raw LaTeX. DO NOT include $$ wrappers here. Double escape backslashes (e.g., \\\\frac).",
   "question": "A practice question based on the topic.",
   "threeJsCode": "Valid JavaScript code to build a 3D diagram."
 }
 Rules for 'threeJsCode':
 1. Executed inside: function(scene, THREE, addUpdate) { ... }
-2. Do not redefine 'scene' or 'THREE'. Use standard Geometries and MeshStandardMaterial.
+2. Create standard Geometries and MeshStandardMaterials.
 3. Animate via addUpdate(function() { ... }).
 4. Scale things to fit -10 to +10. No import statements.
 `;
@@ -209,7 +218,7 @@ async function handleUserQuery() {
     
     appendMessage('user', topic);
     userInput.value = '';
-    window.speechSynthesis.cancel(); // Stop talking if user asks a new question
+    window.speechSynthesis.cancel();
     
     loadingOverlay.classList.remove('hidden');
     sceneLabel.innerText = "Generating 3D model for: " + topic;
