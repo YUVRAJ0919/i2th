@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic AI 3D Tutor - Class 12</title>
+    
+    <!-- KaTeX for Physics/Math Formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar for AI Explanations & Derivations -->
+        <div id="sidebar">
+            <div id="chat-history">
+                <div class="message system">
+                    <h2>Dynamic STEM Tutor</h2>
+                    <p>Enter any topic (e.g., "Cyclotron", "Gauss Law", "Bohr Model"). The AI will generate the explanation, derivation, practice question, and build a 3D animation instantly!</p>
+                </div>
+            </div>
+            <div id="input-area">
+                <input type="text" id="user-input" placeholder="Ask about any Class 12 topic...">
+                <button id="send-btn">Learn</button>
+            </div>
+        </div>
+        
+        <!-- 3D Canvas Area -->
+        <div id="canvas-container">
+            <div id="loading-overlay" class="hidden">🤖 AI is generating 3D Scene...</div>
+            <div id="scene-label">No Topic Loaded</div>
+        </div>
+    </div>
+
+    <!-- Vite processes this main JS file -->
+    <script type="module" src="/app.js"></script>
+</body>
+</html>
