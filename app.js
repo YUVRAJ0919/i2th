@@ -16,7 +16,7 @@ function getRandomApiKey() {
 let voiceEnabled = true;
 const voiceToggle = document.getElementById('voice-toggle');
 
-// Pre-load voices to ensure the Indian accent is available
+// Pre-load voices to find the most human-like Indian accent
 let availableVoices = [];
 window.speechSynthesis.onvoiceschanged = () => {
     availableVoices = window.speechSynthesis.getVoices();
@@ -34,28 +34,11 @@ voiceToggle.addEventListener('click', () => {
     }
 });
 
-function speakTeacher(text) {
-    if (!voiceEnabled) return;
-    window.speechSynthesis.cancel(); // Stop current speech if any
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9; // Slower, human-like teaching pace
-    utterance.pitch = 1.0;
-    
-    // Find an Indian English (Hinglish accent) voice
-    const hinglishVoice = availableVoices.find(v => v.lang === 'en-IN' || v.lang.includes('hi-IN'));
-    if (hinglishVoice) {
-        utterance.voice = hinglishVoice;
-    }
-    
-    window.speechSynthesis.speak(utterance);
-}
-
 // ==========================================
 // 2. SUBJECTS & TOPICS DATABASE
 // ==========================================
 const syllabus = {
-    physics: ["Gauss Law", "Biot-Savart Law", "Bohr Model", "Lens Maker Formula", "Cyclotron", "Wheatstone Bridge", "Electric Dipole", "De Broglie Wavelength", "Faraday's Law"],
+    physics: ["Wheatstone Bridge", "Gauss Law", "Biot-Savart Law", "Bohr Model", "Lens Maker Formula", "Cyclotron", "Electric Dipole", "De Broglie Wavelength", "Faraday's Law"],
     chemistry: ["Nernst Equation", "Arrhenius Equation", "Raoult's Law", "First Order Kinetics", "Aldol Condensation", "SN1 and SN2 Mechanism", "Crystal Field Theory", "Ideal Gas Law"],
     maths: ["Integration by Parts", "Bayes' Theorem", "Direction Cosines", "Matrix Inverse", "Maxima and Minima", "Area under Curve", "Vector Dot Product", "Differential Equations"]
 };
@@ -89,14 +72,14 @@ const loadingOverlay = document.getElementById('loading-overlay');
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-camera.position.set(0, 10, 20);
+camera.position.set(0, 10, 25);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(container.clientWidth, container.clientHeight);
 container.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 1);
 dirLight.position.set(10, 20, 10);
@@ -129,27 +112,81 @@ function clearScene() {
 function addUpdate(fn) { updatables.push(fn); }
 
 // ==========================================
-// 4. AI GENERATION & TEACHING LOGIC
+// 4. AI GENERATION & SYNCED TEACHING LOGIC
 // ==========================================
 const chatHistory = document.getElementById('chat-history');
 const sendBtn = document.getElementById('send-btn');
 
-function typeWriterEffect(element, text, speed, onComplete) {
-    let i = 0;
+function syncTextWithVoice(element, text, onComplete) {
     element.innerHTML = "";
     element.classList.add('typing-cursor');
-    function type() {
-        if (i < text.length) {
-            element.innerHTML += text.charAt(i);
-            i++;
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            setTimeout(type, speed);
-        } else {
-            element.classList.remove('typing-cursor');
-            if (onComplete) onComplete();
+
+    if (!voiceEnabled) {
+        // Fallback fast typing if voice is off
+        let i = 0;
+        function type() {
+            if (i < text.length) {
+                element.innerHTML += text.charAt(i);
+                i++;
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                setTimeout(type, 15);
+            } else {
+                element.classList.remove('typing-cursor');
+                if (onComplete) onComplete();
+            }
         }
+        type();
+        return;
     }
-    type();
+
+    window.speechSynthesis.cancel(); // Stop old speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Human-like pacing
+    utterance.rate = 0.85; 
+    utterance.pitch = 1.0;
+    
+    // Select the best Indian English/Hindi voice available (Prioritizes Google/Natural voices)
+    const bestVoice = availableVoices.find(v => v.name.includes('Google') && (v.lang.includes('IN'))) 
+                   || availableVoices.find(v => v.lang === 'en-IN' || v.lang.includes('hi-IN'));
+    if (bestVoice) {
+        utterance.voice = bestVoice;
+    }
+
+    // Sync text to the words being spoken in real-time
+    let charIndex = 0;
+    utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+            charIndex = event.charIndex + event.charLength;
+            element.innerHTML = text.substring(0, charIndex);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    };
+
+    utterance.onend = () => {
+        element.innerHTML = text; // Ensure full text is shown
+        element.classList.remove('typing-cursor');
+        if (onComplete) onComplete();
+    };
+
+    // Failsafe in case onboundary isn't supported by the browser's TTS engine
+    setTimeout(() => {
+        if (charIndex === 0) {
+            let i = 0;
+            const msPerChar = 45; // Match average speaking speed
+            function fallbackType() {
+                if (i < text.length) {
+                    element.innerHTML += text.charAt(i);
+                    i++;
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    setTimeout(fallbackType, msPerChar);
+                }
+            }
+            fallbackType();
+        }
+    }, 500);
+
+    window.speechSynthesis.speak(utterance);
 }
 
 function appendMessage(sender, text, derivation = null, question = null) {
@@ -160,12 +197,13 @@ function appendMessage(sender, text, derivation = null, question = null) {
     chatHistory.appendChild(msgDiv);
     
     if (sender === 'ai') {
-        speakTeacher(text); // Speak the Hinglish text out loud
-        
-        typeWriterEffect(p, text, 15, () => {
+        // Trigger synced speech and typing
+        syncTextWithVoice(p, text, () => {
+            // Show math formulas only AFTER speaking is done
             if (derivation) {
                 const mathDiv = document.createElement('div');
                 mathDiv.className = 'derivation-box';
+                // Force $$ wrappers to ensure KaTeX renders it in block mode
                 mathDiv.innerHTML = `<strong>Derivation / Formula:</strong><br><br>$$${derivation}$$`;
                 msgDiv.appendChild(mathDiv);
             }
@@ -177,13 +215,15 @@ function appendMessage(sender, text, derivation = null, question = null) {
             }
             chatHistory.scrollTop = chatHistory.scrollHeight;
             
+            // Execute KaTeX rendering specifically on this new element
             if (window.renderMathInElement) {
                 window.renderMathInElement(msgDiv, {
                     delimiters: [
                         {left: '$$', right: '$$', display: true},
                         {left: '$', right: '$', display: false}
                     ],
-                    throwOnError: false
+                    throwOnError: false,
+                    strict: false
                 });
             }
         });
@@ -193,22 +233,24 @@ function appendMessage(sender, text, derivation = null, question = null) {
     }
 }
 
-// Prompt updated to force Hinglish outputs
+// System Prompt heavily updated for connected 3D structures and strict LaTeX rules
 const SYSTEM_PROMPT = `
 You are an expert Class 12 STEM 3D tutor teaching Indian students. The user will give a topic.
 Return ONLY a valid JSON object.
 Format:
 {
-  "explanation": "Clear explanation of the topic written in Hinglish (a mix of Hindi and English written in the English alphabet, e.g., 'Aaj hum seekhenge...', 'Yeh concept bahut important hai...'). Use a friendly, human-like teaching tone. Plain text only, no math symbols.",
-  "derivation": "The mathematical derivation in raw LaTeX. DO NOT include $$ wrappers here. Double escape backslashes (e.g., \\\\frac).",
+  "explanation": "Clear explanation written in Hinglish (a mix of Hindi and English written in the English alphabet). Tone should be friendly and human-like. Plain text only, NO math symbols.",
+  "derivation": "The mathematical derivation in raw LaTeX. CRITICAL RULES: 1) Do NOT use raw \\n for newlines. 2) If multi-step, use \\\\begin{aligned} ... \\\\end{aligned} and use \\\\\\\\ for newlines. 3) Double escape all backslashes (e.g., \\\\frac, \\\\sum).",
   "question": "A practice question based on the topic.",
   "threeJsCode": "Valid JavaScript code to build a 3D diagram."
 }
-Rules for 'threeJsCode':
+CRITICAL Rules for 'threeJsCode':
 1. Executed inside: function(scene, THREE, addUpdate) { ... }
-2. Create standard Geometries and MeshStandardMaterials.
-3. Animate via addUpdate(function() { ... }).
-4. Scale things to fit -10 to +10. No import statements.
+2. NO FLOATING BLOCKS. You MUST connect components (using THREE.CylinderGeometry or THREE.Line) to form proper circuits, bonds, or optical paths. 
+3. E.g., for Wheatstone bridge, build actual connecting wires between the nodes. For optics, draw actual line rays. 
+4. Add a THREE.GridHelper(20, 20) to ground the scene.
+5. Animate via addUpdate(function() { ... }) to make it dynamic.
+6. Return raw JS string code. No import statements.
 `;
 
 async function handleUserQuery() {
@@ -221,57 +263,3 @@ async function handleUserQuery() {
     window.speechSynthesis.cancel();
     
     loadingOverlay.classList.remove('hidden');
-    sceneLabel.innerText = "Generating 3D model for: " + topic;
-    clearScene();
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${AI_MODEL}:generateContent?key=${apiKey}`;
-
-    try {
-        const response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nUser Topic: ${topic}` }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            })
-        });
-        
-        const data = await response.json();
-        if(data.error) throw new Error(data.error.message);
-
-        let rawText = data.candidates[0].content.parts[0].text;
-        rawText = rawText.replace(/```json/g, '').replace(/```javascript/g, '').replace(/```/g, '').trim();
-        
-        let aiResponse;
-        try {
-            aiResponse = JSON.parse(rawText);
-        } catch (e) {
-            rawText = rawText.replace(/\\([a-zA-Z])/g, '\\\\$1');
-            aiResponse = JSON.parse(rawText);
-        }
-
-        appendMessage('ai', aiResponse.explanation, aiResponse.derivation, aiResponse.question);
-
-        if (aiResponse.threeJsCode) {
-            try {
-                const generate3DScene = new Function('scene', 'THREE', 'addUpdate', aiResponse.threeJsCode);
-                generate3DScene(scene, THREE, addUpdate);
-                sceneLabel.innerText = "Interactive 3D: " + topic;
-            } catch (threeErr) {
-                console.error("AI 3D Code Error:", threeErr);
-                sceneLabel.innerText = "Error rendering 3D diagram.";
-            }
-        }
-    } catch (error) {
-        console.error(error);
-        appendMessage('ai', `Connection Failed: ${error.message}`);
-        sceneLabel.innerText = "System Offline";
-    } finally {
-        loadingOverlay.classList.add('hidden');
-    }
-}
-
-sendBtn.addEventListener('click', handleUserQuery);
-userInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleUserQuery();
-});
