@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dynamic AI 3D Tutor - Class 12</title>
     
     <!-- KaTeX for Physics/Math Formulas -->
@@ -14,28 +14,40 @@
 </head>
 <body>
     <div id="app">
-        <!-- Sidebar for AI Explanations & Derivations -->
-        <div id="sidebar">
-            <div id="chat-history">
-                <div class="message system">
-                    <h2>Dynamic STEM Tutor</h2>
-                    <p>Enter any topic (e.g., "Cyclotron", "Gauss Law", "Bohr Model"). The AI will generate the explanation, derivation, practice question, and build a 3D animation instantly!</p>
-                </div>
-            </div>
-            <div id="input-area">
-                <input type="text" id="user-input" placeholder="Ask about any Class 12 topic...">
-                <button id="send-btn">Learn</button>
-            </div>
+        <!-- Quick Access Menu for Class 12 Chapters -->
+        <div id="quick-topics">
+            <span class="topic-label">Class 12 Topics:</span>
+            <button class="topic-btn">Gauss Law</button>
+            <button class="topic-btn">Bohr Model</button>
+            <button class="topic-btn">Cyclotron</button>
+            <button class="topic-btn">Wheatstone Bridge</button>
+            <button class="topic-btn">De Broglie Wavelength</button>
+            <button class="topic-btn">Lens Maker Formula</button>
+            <button class="topic-btn">Electric Dipole</button>
+            <button class="topic-btn">Biot-Savart Law</button>
         </div>
-        
-        <!-- 3D Canvas Area -->
+
+        <!-- 3D Canvas Area (Top half) -->
         <div id="canvas-container">
             <div id="loading-overlay" class="hidden">🤖 AI is generating 3D Scene...</div>
             <div id="scene-label">No Topic Loaded</div>
         </div>
+        
+        <!-- Theory and Explanations Area (Bottom half) -->
+        <div id="theory-container">
+            <div id="chat-history">
+                <div class="message system">
+                    <h2>Live STEM Tutor</h2>
+                    <p>Select a quick topic from the top menu, or ask a specific question below. I will build the 3D model and teach you the theory.</p>
+                </div>
+            </div>
+            <div id="input-area">
+                <input type="text" id="user-input" placeholder="Ask about any formula or topic...">
+                <button id="send-btn">Learn</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Vite processes this main JS file -->
     <script type="module" src="/app.js"></script>
 </body>
 </html>
