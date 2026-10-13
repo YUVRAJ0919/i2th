@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // ==========================================
-// 1. ENVIRONMENT & KEYS
+// 1. API KEYS & VOICE SETUP
 // ==========================================
 const rawKeys = import.meta.env.VITE_GEMINI_API_KEYS || "";
 const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
@@ -13,8 +13,62 @@ function getRandomApiKey() {
     return apiKeys[Math.floor(Math.random() * apiKeys.length)];
 }
 
+let voiceEnabled = true;
+const voiceToggle = document.getElementById('voice-toggle');
+
+voiceToggle.addEventListener('click', () => {
+    voiceEnabled = !voiceEnabled;
+    if (voiceEnabled) {
+        voiceToggle.innerText = '🔊 Voice: ON';
+        voiceToggle.className = 'voice-btn on';
+    } else {
+        voiceToggle.innerText = '🔇 Voice: OFF';
+        voiceToggle.className = 'voice-btn off';
+        window.speechSynthesis.cancel();
+    }
+});
+
+function speakTeacher(text) {
+    if (!voiceEnabled) return;
+    window.speechSynthesis.cancel(); // Stop current speech if any
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95; // Slightly slower, teacher-like pacing
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+}
+
 // ==========================================
-// 2. THREE.JS ENGINE SETUP
+// 2. SUBJECTS & TOPICS DATABASE
+// ==========================================
+const syllabus = {
+    physics: ["Gauss Law", "Biot-Savart Law", "Bohr Model", "Lens Maker Formula", "Cyclotron", "Wheatstone Bridge", "Electric Dipole", "De Broglie Wavelength", "Faraday's Law"],
+    chemistry: ["Nernst Equation", "Arrhenius Equation", "Raoult's Law", "First Order Kinetics", "Aldol Condensation", "SN1 and SN2 Mechanism", "Crystal Field Theory", "Ideal Gas Law"],
+    maths: ["Integration by Parts", "Bayes' Theorem", "Direction Cosines", "Matrix Inverse", "Maxima and Minima", "Area under Curve", "Vector Dot Product", "Differential Equations"]
+};
+
+const subjectSelector = document.getElementById('subject-selector');
+const quickTopicsDiv = document.getElementById('quick-topics');
+const userInput = document.getElementById('user-input');
+
+function loadTopics(subject) {
+    quickTopicsDiv.innerHTML = '';
+    syllabus[subject].forEach(topic => {
+        const btn = document.createElement('button');
+        btn.className = 'topic-btn';
+        btn.innerText = topic;
+        btn.addEventListener('click', () => {
+            userInput.value = `${subject.toUpperCase()}: ${topic}`;
+            handleUserQuery();
+        });
+        quickTopicsDiv.appendChild(btn);
+    });
+}
+// Load Physics by default
+loadTopics('physics');
+subjectSelector.addEventListener('change', (e) => loadTopics(e.target.value));
+
+// ==========================================
+// 3. THREE.JS ENGINE SETUP
 // ==========================================
 const container = document.getElementById('canvas-container');
 const sceneLabel = document.getElementById('scene-label');
@@ -23,11 +77,9 @@ const loadingOverlay = document.getElementById('loading-overlay');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
 camera.position.set(0, 10, 20);
-
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(container.clientWidth, container.clientHeight);
 container.appendChild(renderer.domElement);
-
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
@@ -38,7 +90,6 @@ dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
 
 let updatables = [];
-
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
@@ -62,38 +113,23 @@ function clearScene() {
     }
     updatables = [];
 }
-
-function addUpdate(fn) {
-    updatables.push(fn);
-}
+function addUpdate(fn) { updatables.push(fn); }
 
 // ==========================================
-// 3. AI GENERATION & TEACHING ANIMATION
+// 4. AI GENERATION & TEACHING LOGIC
 // ==========================================
 const chatHistory = document.getElementById('chat-history');
-const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
-const topicButtons = document.querySelectorAll('.topic-btn');
 
-// Binds the Quick Topic buttons to the AI
-topicButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        userInput.value = btn.innerText;
-        handleUserQuery();
-    });
-});
-
-// Typewriter Animation Function
 function typeWriterEffect(element, text, speed, onComplete) {
     let i = 0;
     element.innerHTML = "";
     element.classList.add('typing-cursor');
-    
     function type() {
         if (i < text.length) {
             element.innerHTML += text.charAt(i);
             i++;
-            chatHistory.scrollTop = chatHistory.scrollHeight; // Auto-scroll
+            chatHistory.scrollTop = chatHistory.scrollHeight;
             setTimeout(type, speed);
         } else {
             element.classList.remove('typing-cursor');
@@ -111,13 +147,14 @@ function appendMessage(sender, text, derivation = null, question = null) {
     chatHistory.appendChild(msgDiv);
     
     if (sender === 'ai') {
-        // Animate the theory being taught
+        speakTeacher(text); // Trigger TTS Voice
+        
         typeWriterEffect(p, text, 15, () => {
-            // Once typing finishes, reveal the math formulas and question
             if (derivation) {
                 const mathDiv = document.createElement('div');
                 mathDiv.className = 'derivation-box';
-                mathDiv.innerHTML = `<strong>Derivation / Formula:</strong><br><br>${derivation}`;
+                // Enforce $$ delimiters so KaTeX always catches it
+                mathDiv.innerHTML = `<strong>Derivation / Formula:</strong><br><br>$$${derivation}$$`;
                 msgDiv.appendChild(mathDiv);
             }
             if (question) {
@@ -126,15 +163,16 @@ function appendMessage(sender, text, derivation = null, question = null) {
                 qDiv.innerHTML = `<strong>Practice Question:</strong><br>${question}`;
                 msgDiv.appendChild(qDiv);
             }
-            
             chatHistory.scrollTop = chatHistory.scrollHeight;
             
-            // Render Math accurately
+            // Execute KaTeX rendering specifically on this new element
             if (window.renderMathInElement) {
                 window.renderMathInElement(msgDiv, {
                     delimiters: [
                         {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false}
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '[', right: ']', display: true}
                     ],
                     throwOnError: false
                 });
@@ -146,34 +184,32 @@ function appendMessage(sender, text, derivation = null, question = null) {
     }
 }
 
+// System Prompt updated to fix LaTeX rendering issues
 const SYSTEM_PROMPT = `
 You are an expert Class 12 STEM 3D tutor. The user will give a topic.
-You must return ONLY a valid JSON object.
+Return ONLY a valid JSON object.
 Format:
 {
-  "explanation": "Clear explanation of the topic.",
-  "derivation": "The mathematical derivation in LaTeX. CRITICAL: You must double-escape ALL backslashes in LaTeX (e.g., write \\\\frac instead of \\frac, \\\\cdot instead of \\cdot, \\\\oint instead of \\oint).",
+  "explanation": "Clear explanation. Plain text only, no math symbols, because this will be read aloud by a Text-to-Speech voice.",
+  "derivation": "The mathematical derivation in raw LaTeX. DO NOT include $$ wrappers here, just the raw math code. Double escape backslashes (e.g., \\\\frac).",
   "question": "A practice question based on the topic.",
-  "threeJsCode": "Valid JavaScript code to build a 3D diagram for the topic."
+  "threeJsCode": "Valid JavaScript code to build a 3D diagram."
 }
-
 Rules for 'threeJsCode':
-1. This string will be executed inside a function: function(scene, THREE, addUpdate) { ... }
-2. Do not redefine 'scene' or 'THREE'.
-3. Create standard Geometries (Sphere, Box, Torus, Cylinder), apply MeshStandardMaterial with bright distinct colors, and add them to 'scene'.
-4. Animate it by passing a callback to addUpdate(function() { ... }).
-5. Scale things to fit within a coordinate range of -10 to +10.
-6. Return raw JS string code. No import statements. Do not use unescaped quotes.
+1. Executed inside: function(scene, THREE, addUpdate) { ... }
+2. Do not redefine 'scene' or 'THREE'. Use standard Geometries and MeshStandardMaterial.
+3. Animate via addUpdate(function() { ... }).
+4. Scale things to fit -10 to +10. No import statements.
 `;
 
 async function handleUserQuery() {
     const topic = userInput.value.trim();
     const apiKey = getRandomApiKey();
-    
     if (!topic || !apiKey) return;
     
     appendMessage('user', topic);
     userInput.value = '';
+    window.speechSynthesis.cancel(); // Stop talking if user asks a new question
     
     loadingOverlay.classList.remove('hidden');
     sceneLabel.innerText = "Generating 3D model for: " + topic;
@@ -205,7 +241,6 @@ async function handleUserQuery() {
             aiResponse = JSON.parse(rawText);
         }
 
-        // Display text with teaching animation
         appendMessage('ai', aiResponse.explanation, aiResponse.derivation, aiResponse.question);
 
         if (aiResponse.threeJsCode) {
@@ -218,7 +253,6 @@ async function handleUserQuery() {
                 sceneLabel.innerText = "Error rendering 3D diagram.";
             }
         }
-        
     } catch (error) {
         console.error(error);
         appendMessage('ai', `Connection Failed: ${error.message}`);
