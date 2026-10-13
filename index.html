@@ -14,22 +14,27 @@
 </head>
 <body>
     <div id="app">
-        <!-- Quick Access Menu for Class 12 Chapters -->
+        <!-- Control Panel (Subject Selection & Voice) -->
+        <div id="top-controls">
+            <div class="control-group">
+                <label for="subject-selector">Subject:</label>
+                <select id="subject-selector">
+                    <option value="physics">Physics</option>
+                    <option value="chemistry">Chemistry</option>
+                    <option value="maths">Mathematics</option>
+                </select>
+            </div>
+            <button id="voice-toggle" class="voice-btn on">🔊 Voice: ON</button>
+        </div>
+
+        <!-- Flexible, Auto-Arranging Topics Grid -->
         <div id="quick-topics">
-            <span class="topic-label">Class 12 Topics:</span>
-            <button class="topic-btn">Gauss Law</button>
-            <button class="topic-btn">Bohr Model</button>
-            <button class="topic-btn">Cyclotron</button>
-            <button class="topic-btn">Wheatstone Bridge</button>
-            <button class="topic-btn">De Broglie Wavelength</button>
-            <button class="topic-btn">Lens Maker Formula</button>
-            <button class="topic-btn">Electric Dipole</button>
-            <button class="topic-btn">Biot-Savart Law</button>
+            <!-- Buttons will be injected here by app.js based on selected subject -->
         </div>
 
         <!-- 3D Canvas Area (Top half) -->
         <div id="canvas-container">
-            <div id="loading-overlay" class="hidden">🤖 AI is generating 3D Scene...</div>
+            <div id="loading-overlay" class="hidden">🤖 AI is preparing the lesson...</div>
             <div id="scene-label">No Topic Loaded</div>
         </div>
         
@@ -38,7 +43,7 @@
             <div id="chat-history">
                 <div class="message system">
                     <h2>Live STEM Tutor</h2>
-                    <p>Select a quick topic from the top menu, or ask a specific question below. I will build the 3D model and teach you the theory.</p>
+                    <p>Select a subject and topic from the menu above, or type a custom query. I will build the 3D model, teach you the theory out loud, and provide the derivations.</p>
                 </div>
             </div>
             <div id="input-area">
