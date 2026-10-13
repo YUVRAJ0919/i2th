@@ -31,18 +31,20 @@ container.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
+// Persistent Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 1);
 dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
 
+// Array to hold dynamic AI animations
 let updatables = [];
 
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    updatables.forEach(fn => fn());
+    updatables.forEach(fn => fn()); // Execute AI animations every frame
     renderer.render(scene, camera);
 }
 animate();
@@ -54,6 +56,7 @@ window.addEventListener('resize', () => {
 });
 
 function clearScene() {
+    // Keep lights (indices 0 and 1) but remove all AI-generated meshes
     while(scene.children.length > 2){ 
         const obj = scene.children[scene.children.length - 1];
         if(obj.geometry) obj.geometry.dispose();
@@ -63,6 +66,7 @@ function clearScene() {
     updatables = [];
 }
 
+// Passed to AI generated code so it can register animation functions
 function addUpdate(fn) {
     updatables.push(fn);
 }
@@ -96,7 +100,7 @@ function appendMessage(sender, text, derivation = null, question = null) {
     chatHistory.appendChild(msgDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
     
-    // Check if KaTeX window method is loaded
+    // Trigger KaTeX to render math (LaTeX) in the newly added element safely
     if (window.renderMathInElement) {
         window.renderMathInElement(msgDiv, {
             delimiters: [
@@ -110,11 +114,11 @@ function appendMessage(sender, text, derivation = null, question = null) {
 
 const SYSTEM_PROMPT = `
 You are an expert Class 12 STEM 3D tutor. The user will give a topic.
-You must return ONLY a raw JSON object (without markdown blocks like \`\`\`json).
+You must return ONLY a valid JSON object.
 Format:
 {
   "explanation": "Clear explanation of the topic.",
-  "derivation": "The mathematical derivation in LaTeX (use $$ for display, $ for inline).",
+  "derivation": "The mathematical derivation in LaTeX. CRITICAL: You must double-escape ALL backslashes in LaTeX (e.g., write \\\\frac instead of \\frac, \\\\cdot instead of \\cdot, \\\\oint instead of \\oint).",
   "question": "A practice question based on the topic.",
   "threeJsCode": "Valid JavaScript code to build a 3D diagram for the topic."
 }
@@ -126,7 +130,7 @@ Rules for 'threeJsCode':
 4. To animate the diagram, pass a callback to addUpdate(function() { ... }).
 5. Use basic shapes cleverly to represent atoms, circuits, fields, optical setups, math vectors, or biological concepts. 
 6. Ensure things are scaled to fit within a coordinate range of -10 to +10.
-7. Return raw JS string code inside the JSON. No import statements.
+7. Return raw JS string code. No import statements. Do not use unescaped quotes.
 `;
 
 async function handleUserQuery() {
@@ -134,7 +138,7 @@ async function handleUserQuery() {
     const apiKey = getRandomApiKey();
     
     if (!topic || !apiKey) {
-        appendMessage('system', 'Please enter a topic and ensure API keys are set in .env.');
+        appendMessage('system', 'Please enter a topic and ensure API keys are correctly set in Vercel.');
         return;
     }
     
@@ -154,7 +158,11 @@ async function handleUserQuery() {
             body: JSON.stringify({
                 contents: [{ 
                     parts: [{ text: `${SYSTEM_PROMPT}\n\nUser Topic: ${topic}` }] 
-                }]
+                }],
+                // STRICTLY forces the AI to output valid, parsable JSON
+                generationConfig: {
+                    responseMimeType: "application/json" 
+                }
             })
         });
         
@@ -162,12 +170,25 @@ async function handleUserQuery() {
         if(data.error) throw new Error(data.error.message);
 
         let rawText = data.candidates[0].content.parts[0].text;
+        
+        // Clean any residual markdown formatting the AI might mistakenly add
         rawText = rawText.replace(/```json/g, '').replace(/```javascript/g, '').replace(/```/g, '').trim();
         
-        const aiResponse = JSON.parse(rawText);
+        // JSON Parsing block with a fallback failsafe for unescaped LaTeX backslashes
+        let aiResponse;
+        try {
+            aiResponse = JSON.parse(rawText);
+        } catch (initialParseError) {
+            console.warn("Initial JSON parse failed. Applying aggressive backslash escaping for LaTeX...");
+            // Failsafe: Targets single backslashes followed by letters and double-escapes them
+            rawText = rawText.replace(/\\([a-zA-Z])/g, '\\\\$1');
+            aiResponse = JSON.parse(rawText);
+        }
 
+        // Render UI
         appendMessage('ai', aiResponse.explanation, aiResponse.derivation, aiResponse.question);
 
+        // Compile and execute the AI's 3D JS Code dynamically
         if (aiResponse.threeJsCode) {
             try {
                 const generate3DScene = new Function('scene', 'THREE', 'addUpdate', aiResponse.threeJsCode);
@@ -175,11 +196,12 @@ async function handleUserQuery() {
                 sceneLabel.innerText = "3D View: " + topic;
             } catch (threeErr) {
                 console.error("AI 3D Code Error:", threeErr);
-                sceneLabel.innerText = "Error rendering 3D diagram.";
+                sceneLabel.innerText = "Error rendering 3D diagram. Code was invalid.";
             }
         }
         
     } catch (error) {
+        console.error(error);
         appendMessage('ai', `Error connecting to API: ${error.message}`);
         sceneLabel.innerText = "Connection Failed";
     } finally {
